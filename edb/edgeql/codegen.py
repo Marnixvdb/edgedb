@@ -433,6 +433,10 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         self._write_keywords('DETACHED ')
         self.visit(node.expr)
 
+    def visit_GlobalExpr(self, node: qlast.GlobalExpr) -> None:
+        self._write_keywords('GLOBAL ')
+        self.visit(node.name)
+
     def visit_UnaryOp(self, node: qlast.UnaryOp) -> None:
         op = str(node.op).upper()
         self.write(op)
@@ -1987,6 +1991,50 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
             after_name=after_name,
         )
 
+    def visit_CreateGlobal(
+        self,
+        node: qlast.CreateGlobal
+    ) -> None:
+        keywords = []
+        if node.is_required is True:
+            keywords.append('REQUIRED')
+        elif node.is_required is False:
+            keywords.append('OPTIONAL')
+        if node.cardinality:
+            keywords.append(node.cardinality.as_ptr_qual().upper())
+        keywords.append('GLOBAL')
+
+        pure_computable = (
+            len(node.commands) == 0
+            or (
+                len(node.commands) == 1
+                and isinstance(node.commands[0], qlast.SetField)
+                and node.commands[0].name == 'expr'
+                and not isinstance(node.target, qlast.TypeExpr)
+            )
+        )
+
+        def after_name() -> None:
+            if node.target is not None:
+                if isinstance(node.target, qlast.TypeExpr):
+                    self.write(' -> ')
+                    self.visit(node.target)
+                elif pure_computable:
+                    # computable
+                    self.write(' := (')
+                    self.visit(node.target)
+                    self.write(')')
+
+        self._visit_CreateObject(
+            node, *keywords, after_name=after_name,
+            render_commands=not pure_computable)
+
+    def visit_AlterGlobal(self, node: qlast.AlterGlobal) -> None:
+        self._visit_AlterObject(node, 'GLOBAL')
+
+    def visit_DropGlobal(self, node: qlast.DropGlobal) -> None:
+        self._visit_DropObject(node, 'GLOBAL')
+
     def visit_ConfigSet(self, node: qlast.ConfigSet) -> None:
         self._write_keywords('CONFIGURE ')
         self.write(node.scope.to_edgeql())
@@ -2010,6 +2058,19 @@ class EdgeQLSourceGenerator(codegen.SourceGenerator):
         self._write_keywords(' RESET ')
         self.visit(node.name)
         self._visit_filter(node)
+
+    def visit_SessionSetGlobal(
+        self,
+        node: qlast.SessionSetGlobal
+    ) -> None:
+        if node.expr:
+            self._write_keywords('SET GLOBAL ')
+            self.visit(node.name)
+            self.write(' := ')
+            self.visit(node.expr)
+        else:
+            self._write_keywords('RESET GLOBAL ')
+            self.visit(node.name)
 
     def visit_SessionSetAliasDecl(
         self,

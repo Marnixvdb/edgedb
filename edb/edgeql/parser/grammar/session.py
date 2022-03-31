@@ -43,6 +43,12 @@ class SetStmt(Nonterm):
         self.val = qlast.SessionSetAliasDecl(
             module='.'.join(kids[2].val))
 
+    def reduce_SET_GLOBAL_NodeName_ASSIGN_Expr(self, *kids):
+        self.val = qlast.SessionSetGlobal(
+            name=kids[2].val,
+            expr=kids[4].val,
+        )
+
 
 class ResetStmt(Nonterm):
     def reduce_RESET_ALIAS_Identifier(self, *kids):
@@ -54,3 +60,9 @@ class ResetStmt(Nonterm):
 
     def reduce_RESET_ALIAS_STAR(self, *kids):
         self.val = qlast.SessionResetAllAliases()
+
+    def reduce_RESET_GLOBAL_NodeName(self, *kids):
+        self.val = qlast.SessionSetGlobal(
+            name=kids[2].val,
+            expr=None,
+        )
